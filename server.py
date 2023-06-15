@@ -8,16 +8,31 @@ CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 target_url = 'https://zksync2-mainnet.zksync.io'
 headers = {'Content-Type': 'application/json'}
 
+MAX_RETRIES = 3
+
+def send_request(payload):
+    retry_count = 0
+    while retry_count < MAX_RETRIES:
+        try:
+            if 'Proxy' in request.headers:
+                response = requests.post(target_url, json=payload, proxies={'http': request.headers['Proxy'], 'https': request.headers['Proxy']}, headers=headers)
+            else:
+                response = requests.post(target_url, json=payload, headers=headers)
+
+            response.raise_for_status()  # Генерирует исключение, если получен некорректный статусный код
+            return response.text, response.status_code
+
+        except requests.RequestException:
+            retry_count += 1
+
+    return 'Ошибка при отправке запроса', 500
+
 
 @app.route('/', methods=['POST'])
 def proxy_request():
     payload = request.get_json()
-    if 'Proxy' in request.headers:
-        response = requests.post(target_url, json=payload, proxies={
-                                 'http': request.headers['Proxy'], 'https': request.headers['Proxy']}, headers=headers)
-    else:
-        response = requests.post(target_url, json=payload, headers=headers)
-    return response.text, response.status_code
+    response_text, response_status = send_request(payload)
+    return response_text, response_status
 
 
 @app.route('/', methods=['GET'])
