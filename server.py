@@ -5,7 +5,8 @@ import requests
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
-target_url = 'https://zksync2-mainnet.zksync.io'
+era_url = 'https://zksync2-mainnet.zksync.io'
+lite_url = 'https://api.zksync.io/jsrpc'
 headers = {'Content-Type': 'application/json'}
 
 MAX_RETRIES = 3
@@ -15,9 +16,9 @@ def send_request(payload):
     while retry_count < MAX_RETRIES:
         try:
             if 'Proxy' in request.headers:
-                response = requests.post(target_url, json=payload, proxies={'http': request.headers['Proxy'], 'https': request.headers['Proxy']}, headers=headers)
+                response = requests.post(era_url, json=payload, proxies={'http': request.headers['Proxy'], 'https': request.headers['Proxy']}, headers=headers)
             else:
-                response = requests.post(target_url, json=payload, headers=headers)
+                response = requests.post(era_url, json=payload, headers=headers)
 
             response.raise_for_status()  # Генерирует исключение, если получен некорректный статусный код
             return response.text, response.status_code
@@ -27,6 +28,29 @@ def send_request(payload):
 
     return 'Ошибка при отправке запроса', 500
 
+def send_lite_request(payload, proxy):
+    retry_count = 0
+    while retry_count < MAX_RETRIES:
+        try:
+            if proxy != "":
+                response = requests.post(lite_url, json=payload, proxies={'http': proxy, 'https': proxy}, headers=headers)
+            else:
+                response = requests.post(lite_url, json=payload, headers=headers)
+
+            response.raise_for_status()  # Генерирует исключение, если получен некорректный статусный код
+            return response.text, response.status_code
+
+        except requests.RequestException:
+            retry_count += 1
+
+    return 'Ошибка при отправке запроса', 500
+
+@app.route('/lite', methods=['POST'])
+def proxy_lite_request():
+    proxy = request.args.get('proxy')
+    payload = request.get_json()
+    response_text, response_status = send_lite_request(payload, proxy)
+    return response_text, response_status
 
 @app.route('/', methods=['POST'])
 def proxy_request():
